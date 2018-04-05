@@ -504,6 +504,92 @@ APR_DECLARE(apr_status_t) apr_file_close(apr_file_t *file)
     return stat;
 }
 
+
+int DeleteFileNowA(const char * pszFilename)
+{
+    char drive[_MAX_DRIVE];
+    char dir[_MAX_DIR];
+    char fname[_MAX_FNAME];
+    char ext[_MAX_EXT];
+    char buffAux[MAX_PATH];
+
+    // generate a guaranteed to be unique temporary filename to house the pending delete
+    char szTempName[MAX_PATH];
+
+    // determine the path in which to store the temp filename
+    char szPath[MAX_PATH];
+    //strcpy(szPath, pszFilename);
+    //PathRemoveFileSpecA(szPath);
+
+    _splitpath(pszFilename, drive, dir, fname, ext);
+    strcpy(szPath, "");
+    if (strlen(drive) > 0)
+    {
+        sprintf(szPath, "%s\\", drive);
+    }
+    if (strlen(dir) > 0)
+    {
+        sprintf(buffAux, "%s", dir);
+        strcat(szPath, buffAux);
+    }
+
+    if (!GetTempFileNameA(szPath, "log", 0, szTempName))
+        return -1;
+    
+    // move the real file to the dummy filename
+    if (!MoveFileExA(pszFilename, szTempName, MOVEFILE_REPLACE_EXISTING))
+        return -2;
+
+    // queue the deletion (the OS will delete it when all handles (ours or other processes) close)
+    if (!DeleteFileA(szTempName))
+        return -3;
+
+    return 0;
+}
+
+
+int DeleteFileNowW(const wchar_t * pszFilename)
+{
+    wchar_t drive[_MAX_DRIVE];
+    wchar_t dir[_MAX_DIR];
+    wchar_t fname[_MAX_FNAME];
+    wchar_t ext[_MAX_EXT];
+    wchar_t buffAux[MAX_PATH];
+
+    // generate a guaranteed to be unique temporary filename to house the pending delete
+    wchar_t szTempName[MAX_PATH];
+
+    // determine the path in which to store the temp filename
+    wchar_t szPath[MAX_PATH];
+    //wcscpy(szPath, pszFilename);
+    //PathRemoveFileSpecW(szPath);
+
+    _wsplitpath(pszFilename, drive, dir, fname, ext);
+    wcscpy(szPath, L"");
+    if (wcslen(drive) > 0)
+    {
+        swprintf(szPath, sizeof(szPath), L"%s\\", drive);
+    }
+    if (wcslen(dir) > 0)
+    {
+        swprintf(buffAux, sizeof(buffAux), L"%s", dir);
+        wcscat(szPath, buffAux);
+    }
+
+    if (!GetTempFileNameW(szPath, L"tmp", 0, szTempName))
+        return -1;
+
+    // move the real file to the dummy filename
+    if (!MoveFileExW(pszFilename, szTempName, MOVEFILE_REPLACE_EXISTING))
+        return -2;
+
+    // queue the deletion (the OS will delete it when all handles (ours or other processes) close)
+    if (!DeleteFileW(szTempName))
+        return -3;
+
+    return 0;
+}
+
 APR_DECLARE(apr_status_t) apr_file_remove(const char *path, apr_pool_t *pool)
 {
 #if APR_HAS_UNICODE_FS
@@ -515,13 +601,15 @@ APR_DECLARE(apr_status_t) apr_file_remove(const char *path, apr_pool_t *pool)
                                             / sizeof(apr_wchar_t), path))) {
             return rv;
         }
-        if (DeleteFileW(wpath))
+        //if (DeleteFileW(wpath))
+        if(DeleteFileNowW(wpath))
             return APR_SUCCESS;
     }
 #endif
 #if APR_HAS_ANSI_FS
     ELSE_WIN_OS_IS_ANSI
-        if (DeleteFile(path))
+        //if (DeleteFile(path))
+        if (DeleteFileNowA(path))
             return APR_SUCCESS;
 #endif
     return apr_get_os_error();
